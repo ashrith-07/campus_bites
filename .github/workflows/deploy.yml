@@ -1,0 +1,58 @@
+name: Deploy to AWS EC2
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    name: SSH Deploy to EC2
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ secrets.EC2_PORT || 22 }}
+          script: |
+            set -e
+
+            echo "=== Campus Bites Deployment ==="
+            echo "Timestamp: $(date)"
+
+            # Idempotent: create dir if it doesn't exist
+            mkdir -p /home/ubuntu/campus-bites
+
+            cd /home/ubuntu/campus-bites
+
+            # Pull latest code
+            if [ -d ".git" ]; then
+              git pull origin main
+            else
+              git clone https://github.com/${{ github.repository }} .
+            fi
+
+            # Backend setup (idempotent)
+            cd backend
+            npm ci --omit=dev
+            npx prisma migrate deploy
+            pm2 describe campus-bites-backend > /dev/null 2>&1 \
+              && pm2 restart campus-bites-backend \
+              || pm2 start server.js --name campus-bites-backend
+
+            # Frontend setup (idempotent)
+            cd ../frontend
+            npm ci
+            npm run build
+            pm2 describe campus-bites-frontend > /dev/null 2>&1 \
+              && pm2 restart campus-bites-frontend \
+              || pm2 start npm --name campus-bites-frontend -- start
+
+            pm2 save
+            echo "=== Deployment complete ==="
