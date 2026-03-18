@@ -1,100 +1,99 @@
-name: Deploy Campus Bites to AWS EC2
+name: Deploy Backend to AWS EC2
 
 on:
   workflow_dispatch:
-  pull_request:
 
 concurrency:
-  group: deploy-campus-bites
+  group: deploy-backend
   cancel-in-progress: true
 
 jobs:
-  pr-check:
-    name: PR check (build)
+  backend-check:
+    name: Backend checks (lint)
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
 
-    steps:
-      - uses: actions/checkout@v4
+    defaults:
+      run:
+        working-directory: backend
 
-      - name: Setup Node
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: "npm"
+          cache-dependency-path: backend/package-lock.json
 
-      # ---- Backend ----
-      - name: Install backend deps
+      - name: Install dependencies
         run: npm ci --include=dev
-        working-directory: backend
 
       - name: Generate Prisma client
         run: npx prisma generate
-        working-directory: backend
 
-      - name: Build backend
-        run: npm run build --if-present
-        working-directory: backend
-
-      # ---- Frontend ----
-      - name: Install frontend deps
-        run: npm ci
-        working-directory: frontend
-
-      - name: Build frontend
-        run: npm run build --if-present
-        working-directory: frontend
-
+      - name: Run ESLint
+        run: npm run lint
 
   deploy:
-    name: Deploy to EC2
+    name: Deploy backend to EC2
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      # ---- Setup SSH ----
-      - name: Setup SSH key
+      - name: Setup SSH
+        shell: bash
         run: |
+          set -euo pipefail
           mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ec2_key.pem
-          chmod 600 ~/.ssh/ec2_key.pem
+          printf "%s" "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
 
-      # ---- Deploy ----
-      - name: Deploy via SSH
+      - name: Deploy to EC2
+        shell: bash
         env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_USER: ${{ secrets.EC2_USER || 'ubuntu' }}
           DEPLOY_PATH: ${{ secrets.CAMPUS_BITES_DEPLOY_PATH || '/opt/campus-bites' }}
-          SERVER_ENV: ${{ secrets.CAMPUS_BITES_SERVER_ENV }}
+          BACKEND_ENV: ${{ secrets.CAMPUS_BITES_SERVER_ENV }}
         run: |
-          if [ -z "${SERVER_ENV:-}" ]; then
-            echo "[ERROR] Missing CAMPUS_BITES_SERVER_ENV"
+          set -euo pipefail
+
+          if [ -z "${EC2_HOST:-}" ]; then
+            echo "[ERROR] Missing secret: EC2_HOST"
             exit 1
           fi
 
-          printf "%s" "$SERVER_ENV" > /tmp/server.env
+          if [ -z "${EC2_USER:-}" ]; then
+            echo "[ERROR] Missing secret: EC2_USER (or set default user)"
+            exit 1
+          fi
 
-          scp -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key.pem /tmp/server.env "$EC2_USER@$EC2_HOST:/tmp/server.env"
+          if [ -z "${BACKEND_ENV:-}" ]; then
+            echo "[ERROR] Missing secret: CAMPUS_BITES_SERVER_ENV (backend .env contents)"
+            exit 1
+          fi
+
+          printf "%s" "$BACKEND_ENV" > /tmp/backend.env
+          scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/id_rsa /tmp/backend.env "$EC2_USER@$EC2_HOST:/tmp/backend.env"
 
           REPO_URL="https://github.com/${GITHUB_REPOSITORY}.git"
           BRANCH="${GITHUB_REF_NAME}"
 
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key.pem "$EC2_USER@$EC2_HOST" \
-            "DEPLOY_PATH='$DEPLOY_PATH' REPO_URL='$REPO_URL' BRANCH='$BRANCH' bash -s" << 'EOF'
-          set -e
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/id_rsa "$EC2_USER@$EC2_HOST" << EOF
+          set -euo pipefail
 
           DEPLOY_PATH="${DEPLOY_PATH:-/opt/campus-bites}"
+          REPO_URL="${REPO_URL}"
+          BRANCH="${BRANCH}"
 
-          echo "🚀 Starting deployment..."
-
-          # ---- Install dependencies ----
           sudo apt-get update -y
-
-          if ! command -v git >/dev/null; then
-            sudo apt-get install -y git
-          fi
+          sudo apt-get install -y git ca-certificates curl
 
           if ! command -v node >/dev/null; then
             curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
@@ -105,67 +104,35 @@ jobs:
             sudo npm install -g pm2
           fi
 
-          # ---- Setup project ----
-          sudo mkdir -p "$DEPLOY_PATH"
-          sudo chown -R $USER:$USER "$DEPLOY_PATH"
+          sudo mkdir -p "\$DEPLOY_PATH"
+          REMOTE_USER="\$(id -un)"
+          sudo chown -R "\$REMOTE_USER:\$REMOTE_USER" "\$DEPLOY_PATH"
 
-          if [ ! -d "$DEPLOY_PATH/.git" ]; then
-            git clone "$REPO_URL" "$DEPLOY_PATH"
+          if [ ! -d "\$DEPLOY_PATH/.git" ]; then
+            git clone "\$REPO_URL" "\$DEPLOY_PATH"
           fi
 
-          cd "$DEPLOY_PATH"
+          cd "\$DEPLOY_PATH"
+          git fetch --all --prune
+          git reset --hard "origin/\$BRANCH"
 
-          git fetch --all
-          git reset --hard origin/$BRANCH
-
-          # ---- ENV ----
-          if [ -f /tmp/server.env ]; then
-            install -m 600 /tmp/server.env backend/.env
-            install -m 600 /tmp/server.env frontend/.env
+          if [ -f /tmp/backend.env ]; then
+            install -m 600 /tmp/backend.env backend/.env
           fi
-
-          # ============================
-          # BACKEND
-          # ============================
-          echo "⚙️ Setting up backend..."
 
           cd backend
-
-          npm ci --include=dev
+          npm ci --omit=dev
           npx prisma generate
           npx prisma migrate deploy
-          npm run build
 
-          # Restart backend safely
-          pm2 delete campus-bites-api || true
-          pm2 start server.js --name campus-bites-api
-
-          cd ..
-
-          # ============================
-          # FRONTEND
-          # ============================
-          echo "⚙️ Setting up frontend..."
-
-          cd frontend
-
-          npm ci
-          npm run build
-
-          # Restart frontend safely
-          pm2 delete campus-bites-client || true
-          pm2 start npm --name campus-bites-client -- start -- -p 3000 -H 0.0.0.0
-
-          cd ..
-
-          # ---- Save PM2 ----
+          pm2 restart campus-bites-api || pm2 start npm --name campus-bites-api -- start
           pm2 save
 
-          echo "✅ Deployment successful!"
           pm2 list
-
+          echo "✅ Deployment done"
           EOF
 
       - name: Cleanup SSH key
         if: always()
-        run: rm -f ~/.ssh/ec2_key.pem
+        run: rm -f ~/.ssh/id_rsa
+
