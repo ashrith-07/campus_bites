@@ -70,12 +70,13 @@ jobs:
 
           # Copy backend env as a file (safe for multiline secrets)
           printf "%s" "$SHOPSMART_SERVER_ENV" > /tmp/shopsmart-server.env
-          scp -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key.pem /tmp/shopsmart-server.env "$EC2_USER@$EC2_HOST:/tmp/shopsmart-server.env"
+          scp -o BatchMode=yes -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key.pem /tmp/shopsmart-server.env "$EC2_USER@$EC2_HOST:/tmp/shopsmart-server.env"
 
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key.pem \
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key.pem \
             "$EC2_USER@$EC2_HOST" \
             "DEPLOY_PATH='$DEPLOY_PATH' REPO_URL='$REPO_URL' BRANCH='$BRANCH' bash -s" <<'EOF'
-          set -euo pipefail
+          set -euxo pipefail
+          echo "[REMOTE] connected; starting deploy script..."
 
           # Ensure base tools exist
           if ! command -v git >/dev/null 2>&1; then
