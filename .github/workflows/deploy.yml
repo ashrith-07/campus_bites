@@ -78,7 +78,11 @@ jobs:
 
           scp -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key.pem /tmp/server.env "$EC2_USER@$EC2_HOST:/tmp/server.env"
 
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key.pem "$EC2_USER@$EC2_HOST" << 'EOF'
+          REPO_URL="https://github.com/${GITHUB_REPOSITORY}.git"
+          BRANCH="${GITHUB_REF_NAME}"
+
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key.pem "$EC2_USER@$EC2_HOST" \
+            "DEPLOY_PATH='$DEPLOY_PATH' REPO_URL='$REPO_URL' BRANCH='$BRANCH' bash -s" << 'EOF'
           set -e
 
           DEPLOY_PATH="${DEPLOY_PATH:-/opt/campus-bites}"
@@ -106,13 +110,13 @@ jobs:
           sudo chown -R $USER:$USER "$DEPLOY_PATH"
 
           if [ ! -d "$DEPLOY_PATH/.git" ]; then
-            git clone https://github.com/${GITHUB_REPOSITORY}.git "$DEPLOY_PATH"
+            git clone "$REPO_URL" "$DEPLOY_PATH"
           fi
 
           cd "$DEPLOY_PATH"
 
           git fetch --all
-          git reset --hard origin/${GITHUB_REF_NAME}
+          git reset --hard origin/$BRANCH
 
           # ---- ENV ----
           if [ -f /tmp/server.env ]; then
@@ -134,7 +138,7 @@ jobs:
 
           # Restart backend safely
           pm2 delete campus-bites-api || true
-          pm2 start dist/server.js --name campus-bites-api
+          pm2 start server.js --name campus-bites-api
 
           cd ..
 
