@@ -113,8 +113,13 @@ jobs:
         working-directory: frontend
         run: npx playwright install --with-deps chromium
 
-      - name: Run E2E tests
+      - name: Run E2E tests (local build)
         working-directory: frontend
         run: npx playwright test
         env:
-          PLAYWRIGHT_BASE_URL: https://campus-bites-web.vercel.app
+          # Force Playwright to start the local dev server (webServer in playwright.config)
+          CI: false
+          # Run against the local Next.js server instead of the deployed site
+          PLAYWRIGHT_BASE_URL: http://localhost:3000
+          # Still use the deployed API so auth flows work without needing a local backend
+          NEXT_PUBLIC_API_URL: https://campus-bites-server.vercel.app/api
