@@ -10,8 +10,10 @@
 
 set -euo pipefail
 
-APP_DIR="/home/ubuntu/campus-bites"
-REPO_URL="https://github.com/${GITHUB_REPOSITORY:-your-org/campus-bites}"
+# Allow overriding the deployment directory via environment variable.
+# This makes the script reusable across environments.
+APP_DIR="${APP_DIR:-/home/ubuntu/campus-bites}"
+REPO_URL="${REPO_URL:-https://github.com/${GITHUB_REPOSITORY:-your-org/campus-bites}}"
 BRANCH="${DEPLOY_BRANCH:-main}"
 
 echo "============================================"

@@ -56,10 +56,10 @@ jobs:
         env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_USER: ${{ secrets.EC2_USER || 'ubuntu' }}
-          SHOPSMART_DEPLOY_PATH: ${{ secrets.SHOPSMART_DEPLOY_PATH || '/opt/shopsmart' }}
+          SHOPSMART_DEPLOY_PATH: ${{ secrets.SHOPSMART_DEPLOY_PATH || '/home/ubuntu/campus-bites' }}
           SHOPSMART_SERVER_ENV: ${{ secrets.SHOPSMART_SERVER_ENV }}
         run: |
-          DEPLOY_PATH="${SHOPSMART_DEPLOY_PATH:-/opt/shopsmart}"
+          DEPLOY_PATH="${SHOPSMART_DEPLOY_PATH:-/home/ubuntu/campus-bites}"
           REPO_URL="https://github.com/${GITHUB_REPOSITORY}.git"
           BRANCH="${GITHUB_REF_NAME}"
 
@@ -70,9 +70,14 @@ jobs:
 
           # Copy backend env as a file (safe for multiline secrets)
           printf "%s" "$SHOPSMART_SERVER_ENV" > /tmp/shopsmart-server.env
-          scp -o BatchMode=yes -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key.pem /tmp/shopsmart-server.env "$EC2_USER@$EC2_HOST:/tmp/shopsmart-server.env"
 
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key.pem \
+          SSH_OPTS="-o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=15 -o IdentitiesOnly=yes"
+
+          echo "[LOCAL] Uploading env file to EC2 ($EC2_HOST)..."
+          scp $SSH_OPTS -i ~/.ssh/ec2_key.pem /tmp/shopsmart-server.env "$EC2_USER@$EC2_HOST:/tmp/shopsmart-server.env"
+
+          echo "[LOCAL] Running deploy script on EC2..."
+          ssh $SSH_OPTS -i ~/.ssh/ec2_key.pem \
             "$EC2_USER@$EC2_HOST" \
             "DEPLOY_PATH='$DEPLOY_PATH' REPO_URL='$REPO_URL' BRANCH='$BRANCH' bash -s" <<'EOF'
           set -euxo pipefail
@@ -95,6 +100,12 @@ jobs:
             sudo npm install -g pm2
           fi
 
+          # Ensure the deploy dir exists and is writable; fail fast if sudo requires a password.
+          if ! sudo -n true 2>/dev/null; then
+            echo "[ERROR] sudo requires a password. Ensure SSH user can sudo without password."
+            exit 1
+          fi
+
           sudo mkdir -p "$DEPLOY_PATH"
           sudo chown -R "$USER":"$USER" "$DEPLOY_PATH"
 
@@ -110,18 +121,12 @@ jobs:
           # Install env file that was copied via scp
           install -m 600 /tmp/shopsmart-server.env backend/.env
 
-          cd backend
+          # Ensure deploy script is executable and run it.
+          chmod +x scripts/deploy.sh
+          echo "[REMOTE] Running deploy script (APP_DIR=$DEPLOY_PATH, BRANCH=$BRANCH)"
+          APP_DIR="$DEPLOY_PATH" DEPLOY_BRANCH="$BRANCH" ./scripts/deploy.sh
 
-          npm ci --include=dev
-          npx prisma generate
-          npx prisma migrate deploy
-          npm run build
-
-          # Start or reload backend with pm2 (idempotent)
-          pm2 start server.js --name shopsmart-api --update-env || pm2 restart shopsmart-api --update-env
-          pm2 save
-
-          echo "[OK] Deployed ShopSmart backend."
+          echo "[OK] Deployed ShopSmart backend (and frontend)."
           EOF
 
       - name: Cleanup SSH key
