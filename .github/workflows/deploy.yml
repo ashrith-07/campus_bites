@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: deploy-shopsmart
+  group: deploy-campus-bites
   cancel-in-progress: true
 
 jobs:
@@ -59,22 +59,22 @@ jobs:
         env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_USER: ${{ secrets.EC2_USER || 'ubuntu' }}
-          SHOPSMART_DEPLOY_PATH: ${{ secrets.SHOPSMART_DEPLOY_PATH || '/opt/shopsmart' }}
-          SHOPSMART_SERVER_ENV: ${{ secrets.SHOPSMART_SERVER_ENV }}
+          CAMPUS_BITES_DEPLOY_PATH: ${{ secrets.CAMPUS_BITES_DEPLOY_PATH || '/opt/campus-bites' }}
+          CAMPUS_BITES_SERVER_ENV: ${{ secrets.CAMPUS_BITES_SERVER_ENV }}
         run: |
-          DEPLOY_PATH="${SHOPSMART_DEPLOY_PATH:-/opt/shopsmart}"
+          DEPLOY_PATH="${CAMPUS_BITES_DEPLOY_PATH:-/opt/campus-bites}"
           REPO_URL="https://github.com/${GITHUB_REPOSITORY}.git"
           BRANCH="${GITHUB_REF_NAME}"
 
-          if [ -z "${SHOPSMART_SERVER_ENV:-}" ]; then
-            echo "[ERROR] Missing secret SHOPSMART_SERVER_ENV (server .env contents)."
+          if [ -z "${CAMPUS_BITES_SERVER_ENV:-}" ]; then
+            echo "[ERROR] Missing secret CAMPUS_BITES_SERVER_ENV (server .env contents)."
             # Continue anyway or exit 1; using exit 1 based on previous format
             exit 1
           fi
 
           # Copy backend env as a file (safe for multiline secrets)
-          printf "%s" "$SHOPSMART_SERVER_ENV" > /tmp/shopsmart-server.env
-          scp -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key.pem /tmp/shopsmart-server.env "$EC2_USER@$EC2_HOST:/tmp/shopsmart-server.env"
+          printf "%s" "$CAMPUS_BITES_SERVER_ENV" > /tmp/campus-bites-server.env
+          scp -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key.pem /tmp/campus-bites-server.env "$EC2_USER@$EC2_HOST:/tmp/campus-bites-server.env"
 
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key.pem \
             "$EC2_USER@$EC2_HOST" \
@@ -111,8 +111,8 @@ jobs:
           git pull --ff-only origin "$BRANCH"
 
           # Install env file that was copied via scp
-          if [ -f /tmp/shopsmart-server.env ]; then
-            install -m 600 /tmp/shopsmart-server.env backend/.env
+          if [ -f /tmp/campus-bites-server.env ]; then
+            install -m 600 /tmp/campus-bites-server.env backend/.env
           fi
 
           # ----- Server Setup -----
@@ -123,7 +123,7 @@ jobs:
           npm run build --if-present
 
           # Start or reload backend with pm2
-          pm2 start server.js --name shopsmart-api --update-env || pm2 restart shopsmart-api --update-env
+          pm2 start server.js --name campus-bites-api --update-env || pm2 restart campus-bites-api --update-env
           
           cd ..
 
@@ -133,11 +133,11 @@ jobs:
           npm run build
           
           # Start or reload client with pm2 (if served via node/next, else adjust accordingly)
-          pm2 start npm --name shopsmart-client -- start || pm2 restart shopsmart-client
+          pm2 start npm --name campus-bites-client -- start || pm2 restart campus-bites-client
 
           pm2 save
 
-          echo "[OK] Deployed ShopSmart monorepo."
+          echo "[OK] Deployed Campus Bites monorepo."
           EOF
 
       - name: Cleanup SSH key
