@@ -1,80 +1,145 @@
-name: Deploy to AWS EC2
+name: Deploy Campus Bites to AWS EC2
 
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-shopsmart
+  cancel-in-progress: true
 
 jobs:
-  deploy:
-    name: SSH Deploy to EC2
+  pr-check:
+    name: PR check (build)
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: shopsmart/server/package-lock.json
+
+      - name: Install server dependencies
+        run: npm ci --include=dev
+        working-directory: shopsmart/server
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+        working-directory: shopsmart/server
+
+      - name: Build server
+        run: npm run build --if-present
+        working-directory: shopsmart/server
+
+      - name: Install client dependencies
+        run: npm ci
+        working-directory: shopsmart/client
+
+      - name: Build client
+        run: npm run build --if-present
+        working-directory: shopsmart/client
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          port: ${{ secrets.EC2_PORT || 22 }}
-          script: |
-            set -e
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ec2_key.pem
+          chmod 600 ~/.ssh/ec2_key.pem
 
-            echo "=== Campus Bites Deployment ==="
-            echo "Timestamp: $(date)"
+      - name: Deploy + restart (SSH)
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER || 'ubuntu' }}
+          SHOPSMART_DEPLOY_PATH: ${{ secrets.SHOPSMART_DEPLOY_PATH || '/opt/shopsmart' }}
+          SHOPSMART_SERVER_ENV: ${{ secrets.SHOPSMART_SERVER_ENV }}
+        run: |
+          DEPLOY_PATH="${SHOPSMART_DEPLOY_PATH:-/opt/shopsmart}"
+          REPO_URL="https://github.com/${GITHUB_REPOSITORY}.git"
+          BRANCH="${GITHUB_REF_NAME}"
 
-            # Idempotent: create dir if it doesn't exist
-            mkdir -p /home/ubuntu/campus-bites
+          if [ -z "${SHOPSMART_SERVER_ENV:-}" ]; then
+            echo "[ERROR] Missing secret SHOPSMART_SERVER_ENV (server .env contents)."
+            # Continue anyway or exit 1; using exit 1 based on previous format
+            exit 1
+          fi
 
-            cd /home/ubuntu/campus-bites
+          # Copy backend env as a file (safe for multiline secrets)
+          printf "%s" "$SHOPSMART_SERVER_ENV" > /tmp/shopsmart-server.env
+          scp -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key.pem /tmp/shopsmart-server.env "$EC2_USER@$EC2_HOST:/tmp/shopsmart-server.env"
 
-            # Pull latest code
-            if [ -d ".git" ]; then
-              git pull origin main
-            else
-              git clone https://github.com/${{ github.repository }} .
-            fi
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key.pem \
+            "$EC2_USER@$EC2_HOST" \
+            "DEPLOY_PATH='$DEPLOY_PATH' REPO_URL='$REPO_URL' BRANCH='$BRANCH' bash -s" <<'EOF'
+          set -euo pipefail
 
-            # Ensure Node.js + npm are available (some EC2 AMIs may not include them by default)
-            if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
-              echo "Node.js not found; installing Node.js 20.x"
-              curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-              sudo apt-get update
-              sudo apt-get install -y nodejs
-            fi
+          # Ensure base tools exist
+          if ! command -v git >/dev/null 2>&1; then
+            sudo apt-get update -y
+            sudo apt-get install -y git
+          fi
 
-            # Ensure pm2 is installed globally (used to manage services)
-            if ! command -v pm2 >/dev/null 2>&1; then
-              sudo npm install -g pm2
-            fi
+          # Ensure Node + npm exist (Node 20 LTS)
+          if ! command -v node >/dev/null 2>&1; then
+            curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+            sudo apt-get install -y nodejs
+          fi
 
-            # Backend setup (idempotent)
-            cd backend
+          # Ensure pm2 exists for process management (idempotent)
+          if ! command -v pm2 >/dev/null 2>&1; then
+            sudo npm install -g pm2
+          fi
 
-            # If provided, write a .env file from a GitHub secret called ENV_FILE.
-            # This is useful when the server requires environment variables but does not
-            # have them stored in the repo.
-            if [ -n "${{ secrets.ENV_FILE }}" ]; then
-              echo "Writing .env from ENV_FILE secret"
-              printf '%s' "${{ secrets.ENV_FILE }}" > .env
-            fi
+          sudo mkdir -p "$DEPLOY_PATH"
+          sudo chown -R "$USER":"$USER" "$DEPLOY_PATH"
 
-            npm ci --omit=dev
-            npx prisma migrate deploy
-            pm2 describe campus-bites-backend > /dev/null 2>&1 \
-              && pm2 restart campus-bites-backend \
-              || pm2 start server.js --name campus-bites-backend
+          if [ ! -d "$DEPLOY_PATH/.git" ]; then
+            git clone "$REPO_URL" "$DEPLOY_PATH"
+          fi
 
-            # Frontend setup (idempotent)
-            cd ../frontend
-            npm ci
-            npm run build
-            pm2 describe campus-bites-frontend > /dev/null 2>&1 \
-              && pm2 restart campus-bites-frontend \
-              || pm2 start npm --name campus-bites-frontend -- start
+          cd "$DEPLOY_PATH"
+          git fetch --all --prune
+          git checkout "$BRANCH"
+          git pull --ff-only origin "$BRANCH"
 
-            pm2 save
-            echo "=== Deployment complete ==="
+          # Install env file that was copied via scp
+          if [ -f /tmp/shopsmart-server.env ]; then
+            install -m 600 /tmp/shopsmart-server.env shopsmart/server/.env
+          fi
+
+          # ----- Server Setup -----
+          cd shopsmart/server
+          npm ci --include=dev
+          npx prisma generate
+          npx prisma migrate deploy
+          npm run build --if-present
+
+          # Start or reload backend with pm2
+          pm2 start dist/src/server.js --name shopsmart-api --update-env || pm2 restart shopsmart-api --update-env
+          
+          cd ../..
+
+          # ----- Client Setup -----
+          cd shopsmart/client
+          npm ci
+          npm run build
+          
+          # Start or reload client with pm2 (if served via node/next, else adjust accordingly)
+          pm2 start npm --name shopsmart-client -- start || pm2 restart shopsmart-client
+
+          pm2 save
+
+          echo "[OK] Deployed ShopSmart monorepo."
+          EOF
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/ec2_key.pem
