@@ -20,27 +20,27 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: shopsmart/server/package-lock.json
+          cache-dependency-path: backend/package-lock.json
 
       - name: Install server dependencies
         run: npm ci --include=dev
-        working-directory: shopsmart/server
+        working-directory: backend
 
       - name: Generate Prisma client
         run: npx prisma generate
-        working-directory: shopsmart/server
+        working-directory: backend
 
       - name: Build server
         run: npm run build --if-present
-        working-directory: shopsmart/server
+        working-directory: backend
 
       - name: Install client dependencies
         run: npm ci
-        working-directory: shopsmart/client
+        working-directory: frontend
 
       - name: Build client
         run: npm run build --if-present
-        working-directory: shopsmart/client
+        working-directory: frontend
 
   deploy:
     if: github.event_name != 'pull_request'
@@ -112,23 +112,23 @@ jobs:
 
           # Install env file that was copied via scp
           if [ -f /tmp/shopsmart-server.env ]; then
-            install -m 600 /tmp/shopsmart-server.env shopsmart/server/.env
+            install -m 600 /tmp/shopsmart-server.env backend/.env
           fi
 
           # ----- Server Setup -----
-          cd shopsmart/server
+          cd backend
           npm ci --include=dev
           npx prisma generate
           npx prisma migrate deploy
           npm run build --if-present
 
           # Start or reload backend with pm2
-          pm2 start dist/src/server.js --name shopsmart-api --update-env || pm2 restart shopsmart-api --update-env
+          pm2 start server.js --name shopsmart-api --update-env || pm2 restart shopsmart-api --update-env
           
-          cd ../..
+          cd ..
 
           # ----- Client Setup -----
-          cd shopsmart/client
+          cd frontend
           npm ci
           npm run build
           
