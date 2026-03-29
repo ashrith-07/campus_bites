@@ -22,5 +22,5 @@ RUN npx prisma generate
 # Expose the API port (as defined in server.js)
 EXPOSE 3001
 
-# Command to run the backend application
+# Command to run the backend application    
 CMD ["npm", "start"]
