@@ -133,6 +133,11 @@ jobs:
             pm2 save || true
           fi
 
+          echo "Freeing up disk space by removing unused Docker images and build caches..."
+          sudo docker system prune -af --volumes || true
+          sudo docker builder prune -af || true
+
+          # If the swap file already exists, this just resets it safely without taking more space.
           echo "Setting up 2GB swap space to prevent Out-Of-Memory errors during build..."
           sudo fallocate -l 2G /swapfile || true
           sudo chmod 600 /swapfile || true
