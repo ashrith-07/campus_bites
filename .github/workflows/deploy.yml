@@ -61,6 +61,7 @@ jobs:
           EC2_USER: ${{ secrets.EC2_USER || 'ubuntu' }}
           DEPLOY_PATH: ${{ secrets.CAMPUS_BITES_DEPLOY_PATH || '/opt/campus-bites' }}
           BACKEND_ENV: ${{ secrets.CAMPUS_BITES_SERVER_ENV }}
+          FRONTEND_ENV: ${{ secrets.CAMPUS_BITES_CLIENT_ENV }}
         run: |
           set -euo pipefail
 
@@ -79,8 +80,17 @@ jobs:
             exit 1
           fi
 
+          if [ -z "${FRONTEND_ENV:-}" ]; then
+            echo "[WARNING] Missing secret: CAMPUS_BITES_CLIENT_ENV (frontend .env.local contents). Skipping frontend env."
+          fi
+
           printf "%s" "$BACKEND_ENV" > /tmp/backend.env
           scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/id_rsa /tmp/backend.env "$EC2_USER@$EC2_HOST:/tmp/backend.env"
+
+          if [ -n "${FRONTEND_ENV:-}" ]; then
+            printf "%s" "$FRONTEND_ENV" > /tmp/frontend.env
+            scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/id_rsa /tmp/frontend.env "$EC2_USER@$EC2_HOST:/tmp/frontend.env"
+          fi
 
           REPO_URL="https://github.com/${GITHUB_REPOSITORY}.git"
           BRANCH="${GITHUB_REF_NAME}"
@@ -93,19 +103,12 @@ jobs:
           BRANCH="${BRANCH}"
 
           sudo apt-get update -y
-          sudo apt-get install -y git ca-certificates curl
+          sudo apt-get install -y git ca-certificates curl docker.io docker-compose-v2
 
-          if ! command -v node >/dev/null; then
-            curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-            sudo apt-get install -y nodejs
-          fi
-
-          if ! command -v pm2 >/dev/null; then
-            sudo npm install -g pm2
-          fi
+          REMOTE_USER="\$(id -un)"
+          sudo usermod -aG docker "\$REMOTE_USER" || true
 
           sudo mkdir -p "\$DEPLOY_PATH"
-          REMOTE_USER="\$(id -un)"
           sudo chown -R "\$REMOTE_USER:\$REMOTE_USER" "\$DEPLOY_PATH"
 
           if [ ! -d "\$DEPLOY_PATH/.git" ]; then
@@ -120,15 +123,21 @@ jobs:
             install -m 600 /tmp/backend.env backend/.env
           fi
 
-          cd backend
-          npm ci --omit=dev
-          npx prisma generate
-          npx prisma migrate deploy
+          if [ -f /tmp/frontend.env ]; then
+            install -m 600 /tmp/frontend.env frontend/.env.local
+          fi
 
-          pm2 restart campus-bites-api || pm2 start npm --name campus-bites-api -- start
-          pm2 save
+          if command -v pm2 >/dev/null; then
+            pm2 stop campus-bites-api || true
+            pm2 delete campus-bites-api || true
+            pm2 save || true
+          fi
 
-          pm2 list
+          sudo docker compose up -d --build
+
+          echo "Running Prisma migrations..."
+          sudo docker compose exec -T backend npx prisma migrate deploy
+
           echo "✅ Deployment done"
           EOF
 
