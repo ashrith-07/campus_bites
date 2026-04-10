@@ -1,4 +1,4 @@
-name: Deploy Backend to AWS EC2
+name: Deploy Campus Bites to AWS EC2
 
 on:
   workflow_dispatch:
@@ -132,6 +132,12 @@ jobs:
             pm2 delete campus-bites-api || true
             pm2 save || true
           fi
+
+          echo "Setting up 2GB swap space to prevent Out-Of-Memory errors during build..."
+          sudo fallocate -l 2G /swapfile || true
+          sudo chmod 600 /swapfile || true
+          sudo mkswap /swapfile || true
+          sudo swapon /swapfile || true
 
           sudo docker compose up -d --build
 
