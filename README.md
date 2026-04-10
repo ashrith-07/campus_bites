@@ -4,8 +4,6 @@
 
 **A production-grade full-stack food ordering platform for college campuses**
 
-[![CI Pipeline](https://img.shields.io/github/actions/workflow/status/ashrith-07/campus-bites/ci.yml?branch=main&label=CI&style=for-the-badge&logo=github-actions)](https://github.com/ashrith-07/campus-bites/actions)
-[![Deploy](https://img.shields.io/github/actions/workflow/status/ashrith-07/campus-bites/deploy.yml?label=Deploy&style=for-the-badge&logo=amazonaws)](https://github.com/ashrith-07/campus-bites/actions)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-20-339933?style=for-the-badge&logo=node.js)](https://nodejs.org/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker)](https://docs.docker.com/compose/)
@@ -20,21 +18,39 @@
 
 ## 📋 Table of Contents
 
-- [Overview](#-overview)
-- [Tech Stack](#-tech-stack)
-- [System Architecture](#-system-architecture)
-- [Repository Structure](#-repository-structure)
-- [Getting Started](#-getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Local Development](#local-development)
-  - [Docker (Recommended)](#docker-recommended)
-- [AWS Deployment (Terraform + Docker)](#-aws-deployment-terraform--docker)
-- [CI/CD Pipeline](#-cicd-pipeline)
-- [Testing Strategy](#-testing-strategy)
-- [Environment Variables](#-environment-variables)
-- [Database Schema](#-database-schema)
-- [Scripts Reference](#-scripts-reference)
-- [Design Decisions](#-design-decisions)
+- [🍔 Campus Bites](#-campus-bites)
+  - [📋 Table of Contents](#-table-of-contents)
+  - [🎯 Overview](#-overview)
+    - [User Roles](#user-roles)
+  - [🛠 Tech Stack](#-tech-stack)
+  - [🏗 System Architecture](#-system-architecture)
+    - [Order Flow](#order-flow)
+  - [📁 Repository Structure](#-repository-structure)
+  - [🚀 Getting Started](#-getting-started)
+    - [Prerequisites](#prerequisites)
+    - [Local Development](#local-development)
+    - [Docker (Recommended)](#docker-recommended)
+  - [☁️ AWS Deployment (Terraform + Docker)](#️-aws-deployment-terraform--docker)
+    - [1. Provision Infrastructure](#1-provision-infrastructure)
+    - [2. Bootstrap the Server (one time only)](#2-bootstrap-the-server-one-time-only)
+    - [3. Deploy (via GitHub Actions — one click)](#3-deploy-via-github-actions--one-click)
+  - [🔄 CI/CD Pipeline](#-cicd-pipeline)
+    - [`ci.yml` — Quality Gate (every push \& PR)](#ciyml--quality-gate-every-push--pr)
+    - [`pr-lint.yml` — PR Gate](#pr-lintyml--pr-gate)
+    - [`deploy.yml` — AWS EC2 Deploy](#deployyml--aws-ec2-deploy)
+  - [🧪 Testing Strategy](#-testing-strategy)
+    - [Backend Unit Tests (`src/tests/unit/`)](#backend-unit-tests-srctestsunit)
+    - [Backend Integration Tests (`src/tests/integration/`)](#backend-integration-tests-srctestsintegration)
+    - [Frontend Unit Tests (`__tests__/`)](#frontend-unit-tests-__tests__)
+    - [E2E Tests (`e2e/userFlows.spec.js`)](#e2e-tests-e2euserflowsspecjs)
+  - [🔐 Environment Variables](#-environment-variables)
+    - [Backend (`backend/.env`)](#backend-backendenv)
+    - [Frontend (`frontend/.env.local`)](#frontend-frontendenvlocal)
+  - [🗄 Database Schema](#-database-schema)
+  - [📜 Scripts Reference](#-scripts-reference)
+  - [💡 Design Decisions](#-design-decisions)
+  - [📦 Dependabot](#-dependabot)
+  - [🤝 Contributing](#-contributing)
 
 ---
 
@@ -46,29 +62,29 @@ The project follows a **production-grade DevOps workflow** with full CI/CD autom
 
 ### User Roles
 
-| Role | Capabilities |
-|------|-------------|
-| **Customer** | Browse menu · Add to cart · Checkout · Real-time order tracking |
-| **Vendor** | Manage menu items · View all orders · Update order status · Toggle store open/closed |
+| Role         | Capabilities                                                                         |
+| ------------ | ------------------------------------------------------------------------------------ |
+| **Customer** | Browse menu · Add to cart · Checkout · Real-time order tracking                      |
+| **Vendor**   | Manage menu items · View all orders · Update order status · Toggle store open/closed |
 
 ---
 
 ## 🛠 Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| **Frontend** | Next.js 16, React 19, Tailwind CSS, Lucide Icons |
-| **Backend** | Express 5, Node.js 20, Prisma ORM |
-| **Database** | MySQL (PlanetScale / AWS RDS compatible) |
-| **Real-time** | Pusher Channels (WebSocket push notifications) |
-| **Auth** | JWT (`jsonwebtoken` + `bcryptjs`), 7-day expiry |
-| **Image Storage** | Cloudinary |
-| **Validation** | Zod schemas (backend) |
-| **Containerization** | Docker, Docker Compose |
-| **Infrastructure** | Terraform (AWS EC2 + Security Groups) |
-| **CI/CD** | GitHub Actions (3 pipelines) |
-| **Testing** | Jest, Supertest, React Testing Library, Playwright |
-| **Code Quality** | ESLint, Prettier, Dependabot |
+| Layer                | Technology                                         |
+| -------------------- | -------------------------------------------------- |
+| **Frontend**         | Next.js 16, React 19, Tailwind CSS, Lucide Icons   |
+| **Backend**          | Express 5, Node.js 20, Prisma ORM                  |
+| **Database**         | MySQL (PlanetScale / AWS RDS compatible)           |
+| **Real-time**        | Pusher Channels (WebSocket push notifications)     |
+| **Auth**             | JWT (`jsonwebtoken` + `bcryptjs`), 7-day expiry    |
+| **Image Storage**    | Cloudinary                                         |
+| **Validation**       | Zod schemas (backend)                              |
+| **Containerization** | Docker, Docker Compose                             |
+| **Infrastructure**   | Terraform (AWS EC2 + Security Groups)              |
+| **CI/CD**            | GitHub Actions (3 pipelines)                       |
+| **Testing**          | Jest, Supertest, React Testing Library, Playwright |
+| **Code Quality**     | ESLint, Prettier, Dependabot                       |
 
 ---
 
@@ -76,26 +92,26 @@ The project follows a **production-grade DevOps workflow** with full CI/CD autom
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│                        Browser / Mobile                       │
+│                        Browser / Mobile                      │
 │               Next.js 16 (App Router, React 19)              │
 │   Pages: / · /auth/login · /auth/signup · /checkout          │
-│          /order-tracking · /vendor · /profile                 │
-│   Contexts: AuthContext · CartContext · PusherContext         │
+│          /order-tracking · /vendor · /profile                │
+│   Contexts: AuthContext · CartContext · PusherContext        │
 └────────────────────────┬─────────────────────────────────────┘
                          │ HTTPS REST API calls (lib/api.js)
                          │ + Pusher WebSocket (real-time)
 ┌────────────────────────▼─────────────────────────────────────┐
-│                  Express 5 Backend (Node.js)                  │
-│  Routes:  /api/auth · /api/menu · /api/orders                 │
-│           /api/users · /api/store · /api/upload               │
-│  Middleware: authenticateToken · checkVendorRole              │
-│  Validation: Zod schemas                                      │
+│                  Express 5 Backend (Node.js)                 │
+│  Routes:  /api/auth · /api/menu · /api/orders                │
+│           /api/users · /api/store · /api/upload              │
+│  Middleware: authenticateToken · checkVendorRole             │
+│  Validation: Zod schemas                                     │
 └──────────┬──────────────────────────┬────────────────────────┘
            │ Prisma ORM               │ Pusher SDK
 ┌──────────▼──────────┐    ┌──────────▼──────────┐
-│   MySQL Database    │    │   Pusher Channels    │
-│  (AWS RDS / Local)  │    │  order updates +     │
-│                     │    │  vendor alerts       │
+│   MySQL Database    │    │   Pusher Channels   │
+│  (AWS RDS / Local)  │    │  order updates +    │
+│                     │    │  vendor alerts      │
 └─────────────────────┘    └─────────────────────┘
            │
   Cloudinary (image storage)
@@ -244,11 +260,11 @@ docker compose up --build -d
 docker compose down
 ```
 
-| Service | URL |
-|---------|-----|
-| Frontend | http://localhost:3000 |
-| Backend API | http://localhost:3001/api |
-| API Status | http://localhost:3001/api/status |
+| Service     | URL                              |
+| ----------- | -------------------------------- |
+| Frontend    | http://localhost:3000            |
+| Backend API | http://localhost:3001/api        |
+| API Status  | http://localhost:3001/api/status |
 
 ---
 
@@ -288,12 +304,12 @@ This idempotent script installs: `git`, `Docker`, `Docker Compose`, `Nginx` (rev
 
 Set these **GitHub Secrets** in your repository settings:
 
-| Secret | Description |
-|--------|-------------|
-| `EC2_HOST` | Public IP of your EC2 instance |
-| `EC2_USER` | SSH user (default: `ubuntu`) |
-| `EC2_SSH_KEY` | Contents of your `.pem` private key |
-| `CAMPUS_BITES_SERVER_ENV` | Full contents of `backend/.env` |
+| Secret                    | Description                            |
+| ------------------------- | -------------------------------------- |
+| `EC2_HOST`                | Public IP of your EC2 instance         |
+| `EC2_USER`                | SSH user (default: `ubuntu`)           |
+| `EC2_SSH_KEY`             | Contents of your `.pem` private key    |
+| `CAMPUS_BITES_SERVER_ENV` | Full contents of `backend/.env`        |
 | `CAMPUS_BITES_CLIENT_ENV` | Full contents of `frontend/.env.local` |
 
 Then trigger deployment from GitHub → Actions → **"Deploy Campus Bites to AWS EC2"** → **Run workflow**.
@@ -349,31 +365,31 @@ Triggered manually via `workflow_dispatch`. Validates secrets, securely copies e
 
 ### Backend Unit Tests (`src/tests/unit/`)
 
-| Test File | What It Covers |
-|-----------|---------------|
-| `authController.test.js` | Signup/login validation, duplicate detection, JWT generation |
-| `menuController.test.js` | CRUD for menu items, Prisma error codes (P2002, P2025) |
-| `authMiddleware.test.js` | JWT verification, missing/expired tokens, role enforcement |
-| `orderController.test.js` | Checkout flow, order confirmation, status transitions |
+| Test File                 | What It Covers                                               |
+| ------------------------- | ------------------------------------------------------------ |
+| `authController.test.js`  | Signup/login validation, duplicate detection, JWT generation |
+| `menuController.test.js`  | CRUD for menu items, Prisma error codes (P2002, P2025)       |
+| `authMiddleware.test.js`  | JWT verification, missing/expired tokens, role enforcement   |
+| `orderController.test.js` | Checkout flow, order confirmation, status transitions        |
 
 All unit tests **mock Prisma and bcrypt** — no real database required. Fast, isolated, and CI-friendly.
 
 ### Backend Integration Tests (`src/tests/integration/`)
 
-| Test File | What It Covers |
-|-----------|---------------|
+| Test File                  | What It Covers                                      |
+| -------------------------- | --------------------------------------------------- |
 | `auth.integration.test.js` | Full HTTP POST `/auth/signup` + `/auth/login` flows |
-| `menu.integration.test.js` | GET/POST/DELETE `/menu/items` with auth middleware |
+| `menu.integration.test.js` | GET/POST/DELETE `/menu/items` with auth middleware  |
 
 Uses **Supertest** to spin up the real Express app. Validates that routes, middleware, and controllers are correctly wired end-to-end.
 
 ### Frontend Unit Tests (`__tests__/`)
 
-| Test File | What It Covers |
-|-----------|---------------|
-| `MenuCard.test.jsx` | Rendering, add-to-cart button, popular badge, price display |
-| `api.test.js` | All API methods — request shape, auth headers, error handling |
-| `CartContext.test.jsx` | Add/increment/updateQuantity/clear and total calculations |
+| Test File              | What It Covers                                                |
+| ---------------------- | ------------------------------------------------------------- |
+| `MenuCard.test.jsx`    | Rendering, add-to-cart button, popular badge, price display   |
+| `api.test.js`          | All API methods — request shape, auth headers, error handling |
+| `CartContext.test.jsx` | Add/increment/updateQuantity/clear and total calculations     |
 
 Uses **Jest + React Testing Library** in a jsdom environment with mocked contexts.
 
@@ -405,27 +421,27 @@ npm run test:coverage
 
 ### Backend (`backend/.env`)
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `DATABASE_URL` | ✅ | MySQL connection string |
-| `JWT_SECRET` | ✅ | Secret key for signing JWTs |
-| `PORT` | ✅ | Server port (default: `3001`) |
-| `NODE_ENV` | ✅ | `development` / `production` / `test` |
-| `PUSHER_APP_ID` | ✅ | Pusher application ID |
-| `PUSHER_KEY` | ✅ | Pusher key |
-| `PUSHER_SECRET` | ✅ | Pusher secret |
-| `PUSHER_CLUSTER` | ✅ | Pusher cluster (e.g. `ap2`) |
-| `CLOUDINARY_CLOUD_NAME` | ✅ | Cloudinary cloud name |
-| `CLOUDINARY_API_KEY` | ✅ | Cloudinary API key |
-| `CLOUDINARY_API_SECRET` | ✅ | Cloudinary API secret |
+| Variable                | Required | Description                           |
+| ----------------------- | -------- | ------------------------------------- |
+| `DATABASE_URL`          | ✅        | MySQL connection string               |
+| `JWT_SECRET`            | ✅        | Secret key for signing JWTs           |
+| `PORT`                  | ✅        | Server port (default: `3001`)         |
+| `NODE_ENV`              | ✅        | `development` / `production` / `test` |
+| `PUSHER_APP_ID`         | ✅        | Pusher application ID                 |
+| `PUSHER_KEY`            | ✅        | Pusher key                            |
+| `PUSHER_SECRET`         | ✅        | Pusher secret                         |
+| `PUSHER_CLUSTER`        | ✅        | Pusher cluster (e.g. `ap2`)           |
+| `CLOUDINARY_CLOUD_NAME` | ✅        | Cloudinary cloud name                 |
+| `CLOUDINARY_API_KEY`    | ✅        | Cloudinary API key                    |
+| `CLOUDINARY_API_SECRET` | ✅        | Cloudinary API secret                 |
 
 ### Frontend (`frontend/.env.local`)
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `NEXT_PUBLIC_API_URL` | ✅ | Backend API base URL |
-| `NEXT_PUBLIC_PUSHER_KEY` | ✅ | Pusher public key |
-| `NEXT_PUBLIC_PUSHER_CLUSTER` | ✅ | Pusher cluster |
+| Variable                     | Required | Description          |
+| ---------------------------- | -------- | -------------------- |
+| `NEXT_PUBLIC_API_URL`        | ✅        | Backend API base URL |
+| `NEXT_PUBLIC_PUSHER_KEY`     | ✅        | Pusher public key    |
+| `NEXT_PUBLIC_PUSHER_CLUSTER` | ✅        | Pusher cluster       |
 
 ---
 
@@ -458,32 +474,32 @@ Enums: UserRole {CUSTOMER, VENDOR} · OrderStatus {PENDING, PROCESSING, READY, C
 
 ## 📜 Scripts Reference
 
-| Script | Location | Purpose |
-|--------|----------|---------|
-| `setup-ec2.sh` | `scripts/` | One-time bootstrap: Node, Docker, Nginx, PM2 |
-| `seed-db.sh` | `scripts/` | Run Prisma migrations + seed idempotently |
-| `rollback.sh` | `scripts/` | Roll back one git commit and restart services |
-| `npm run dev` | `backend/` or `frontend/` | Start local dev server |
-| `npm run lint` | Both | Run ESLint |
-| `npm run format` | Both | Run Prettier |
-| `npm test` | Both | Run Jest test suite |
-| `npm run test:coverage` | Both | Generate coverage report |
-| `npx playwright test` | `frontend/` | Run E2E tests |
+| Script                  | Location                  | Purpose                                       |
+| ----------------------- | ------------------------- | --------------------------------------------- |
+| `setup-ec2.sh`          | `scripts/`                | One-time bootstrap: Node, Docker, Nginx, PM2  |
+| `seed-db.sh`            | `scripts/`                | Run Prisma migrations + seed idempotently     |
+| `rollback.sh`           | `scripts/`                | Roll back one git commit and restart services |
+| `npm run dev`           | `backend/` or `frontend/` | Start local dev server                        |
+| `npm run lint`          | Both                      | Run ESLint                                    |
+| `npm run format`        | Both                      | Run Prettier                                  |
+| `npm test`              | Both                      | Run Jest test suite                           |
+| `npm run test:coverage` | Both                      | Generate coverage report                      |
+| `npx playwright test`   | `frontend/`               | Run E2E tests                                 |
 
 ---
 
 ## 💡 Design Decisions
 
-| Decision | Rationale |
-|----------|-----------|
-| **Pusher over self-hosted Socket.io** | No infra to maintain; works through NAT/firewalls; built-in channel auth maps cleanly to customer/vendor roles |
-| **Prisma over raw SQL** | Type-safe queries, schema-first migrations, and readable models reduce runtime bugs |
-| **Next.js App Router** | SSR improves initial load & SEO; file-system routing keeps pages organized |
-| **JWT over Sessions** | Stateless — scales horizontally; no session store required; clean for API clients |
-| **Mock Prisma in tests** | Tests run in CI without a live MySQL instance; faster execution; unit tests test logic, not the DB driver |
-| **Idempotent deploy scripts** | Safe to re-run on network failure; `mkdir -p`, `pm2 describe || start`, `git reset --hard` prevent corruption |
+| Decision                                  | Rationale                                                                                                          |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **Pusher over self-hosted Socket.io**     | No infra to maintain; works through NAT/firewalls; built-in channel auth maps cleanly to customer/vendor roles     |
+| **Prisma over raw SQL**                   | Type-safe queries, schema-first migrations, and readable models reduce runtime bugs                                |
+| **Next.js App Router**                    | SSR improves initial load & SEO; file-system routing keeps pages organized                                         |
+| **JWT over Sessions**                     | Stateless — scales horizontally; no session store required; clean for API clients                                  |
+| **Mock Prisma in tests**                  | Tests run in CI without a live MySQL instance; faster execution; unit tests test logic, not the DB driver          |
+| **Idempotent deploy scripts**             | Safe to re-run on network failure; `mkdir -p`, `pm2 describe                                                       |  | start`, `git reset --hard` prevent corruption |
 | **Dependabot with major-version pinning** | Auto-PRs keep dependencies fresh; manual review gate prevents surprise breaking changes for Next.js, React, Prisma |
-| **t3.small + 1 GB swap** | Balances cost vs. capacity for running two Node processes + Docker builds on a single instance |
+| **t3.small + 1 GB swap**                  | Balances cost vs. capacity for running two Node processes + Docker builds on a single instance                     |
 
 ---
 
@@ -491,11 +507,11 @@ Enums: UserRole {CUSTOMER, VENDOR} · OrderStatus {PENDING, PROCESSING, READY, C
 
 Automated dependency updates run on this schedule:
 
-| Ecosystem | Directory | Schedule |
-|-----------|-----------|----------|
-| npm (backend) | `/backend` | Weekly (Monday) |
+| Ecosystem      | Directory   | Schedule        |
+| -------------- | ----------- | --------------- |
+| npm (backend)  | `/backend`  | Weekly (Monday) |
 | npm (frontend) | `/frontend` | Weekly (Monday) |
-| GitHub Actions | `/` | Monthly |
+| GitHub Actions | `/`         | Monthly         |
 
 Major version bumps for `next`, `react`, `react-dom`, and `prisma` are **blocked** — these require manual testing before upgrading.
 
