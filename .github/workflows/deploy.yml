@@ -133,18 +133,26 @@ jobs:
             pm2 save || true
           fi
 
+          echo "Disk space before cleanup:"
+          df -h
+
           echo "Freeing up disk space by removing unused Docker images and build caches..."
           sudo docker system prune -af --volumes || true
           sudo docker builder prune -af || true
 
           # If the swap file already exists, this just resets it safely without taking more space.
-          echo "Setting up 2GB swap space to prevent Out-Of-Memory errors during build..."
-          sudo fallocate -l 2G /swapfile || true
+          echo "Setting up 1GB swap space (lowered to save disk) to prevent Out-Of-Memory errors during build..."
+          sudo fallocate -l 1G /swapfile || true
           sudo chmod 600 /swapfile || true
           sudo mkswap /swapfile || true
           sudo swapon /swapfile || true
 
-          sudo docker compose up -d --build
+          echo "Disk space after cleanup and swap allocation:"
+          df -h
+
+          echo "Building containers from scratch (bypassing cache)..."
+          sudo docker compose build --no-cache
+          sudo docker compose up -d
 
           echo "Running Prisma migrations..."
           sudo docker compose exec -T backend npx prisma migrate deploy

@@ -11,7 +11,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies cleanly
-RUN npm ci
+RUN npm ci && npm cache clean --force
 
 # Copy the rest of the backend source code
 COPY . .
