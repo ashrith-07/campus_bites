@@ -1,95 +1,121 @@
-
-
-# Fetch the latest Ubuntu 24.04 LTS AMI
-data "aws_ami" "ubuntu" {
-  most_recent = true
-  owners      = ["099720109477"] # Canonical
-
-  filter {
-    name   = "name"
-    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"]
+# Provider and Remote State Configuration
+terraform {
+  required_version = ">= 1.5.0"
+  
+  backend "s3" {
+    key     = "campus-bites/terraform.tfstate"
+    region  = "us-east-1"
+    encrypt = true
+    # bucket will be provided dynamically via GitHub Actions
   }
 
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.0"
+    }
   }
 }
 
-# Default VPC Configuration (assumes default VPC is available in account, typical for simple deployments)
-data "aws_vpc" "default" {
-  default = true
+provider "aws" {
+  region = var.aws_region
 }
 
-# Create a Security Group
-resource "aws_security_group" "campus_bites_sg" {
-  name        = "campus-bites-sg"
-  description = "Security group for Campus Bites deployment allowing SSH and web access"
-  vpc_id      = data.aws_vpc.default.id
+# Fetch availability zones
+data "aws_availability_zones" "available" {}
 
-  # Allow SSH
+# VPC Configuration
+resource "aws_vpc" "main" {
+  cidr_block           = var.vpc_cidr
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+
+  tags = {
+    Name        = "${var.project_name}-vpc"
+    Environment = var.environment
+  }
+}
+
+# Public Subnets (Fargate needs public subnets or a NAT gateway to pull images.
+# NAT Gateways cost money, so we'll use public subnets and assign public IPs).
+resource "aws_subnet" "public" {
+  count             = 2
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index)
+  availability_zone = data.aws_availability_zones.available.names[count.index]
+  map_public_ip_on_launch = true
+
+  tags = {
+    Name        = "${var.project_name}-public-subnet-${count.index + 1}"
+    Environment = var.environment
+  }
+}
+
+# Internet Gateway
+resource "aws_internet_gateway" "igw" {
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name        = "${var.project_name}-igw"
+    Environment = var.environment
+  }
+}
+
+# Route Table for Public Subnets
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.igw.id
+  }
+
+  tags = {
+    Name        = "${var.project_name}-public-rt"
+    Environment = var.environment
+  }
+}
+
+# Route Table Association
+resource "aws_route_table_association" "public" {
+  count          = 2
+  subnet_id      = aws_subnet.public[count.index].id
+  route_table_id = aws_route_table.public.id
+}
+
+# Security Group for ECS Tasks
+resource "aws_security_group" "ecs_tasks" {
+  name        = "${var.project_name}-ecs-tasks-sg"
+  description = "Allow inbound access on ports 3000 and 3001"
+  vpc_id      = aws_vpc.main.id
+
   ingress {
-    description = "SSH from anywhere"
-    from_port   = 22
-    to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  # Allow Frontend access
-  ingress {
-    description = "Frontend from anywhere"
     from_port   = 3000
     to_port     = 3000
-    protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # Allow Backend API access
   ingress {
-    description = "Backend from anywhere"
+    protocol    = "tcp"
     from_port   = 3001
     to_port     = 3001
-    protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # Allow outbound internet access
   egress {
+    protocol    = "-1"
     from_port   = 0
     to_port     = 0
-    protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
   tags = {
-    Name = "campus-bites-sg"
+    Name        = "${var.project_name}-ecs-tasks-sg"
+    Environment = var.environment
   }
 }
-
-# Launch the EC2 Instance
-resource "aws_instance" "app_server" {
-  ami           = data.aws_ami.ubuntu.id
-  instance_type = "t3.small" # Using t3.small for running both node apps + DB connections
-
-  key_name               = "vockey"
-  vpc_security_group_ids = [aws_security_group.campus_bites_sg.id]
-
-  # Provision 20 GB gp3 storage
-  root_block_device {
-    volume_size = 20
-    volume_type = "gp3"
-  }
-
-  tags = {
-    Name = "campus-bites-server"
-  }
-}
-
-# Output the Instance Public IP
-output "ec2_public_ip" {
-  description = "The public IP address of the EC2 instance"
-  value       = aws_instance.app_server.public_ip
-}
-
-

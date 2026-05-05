@@ -1,26 +1,40 @@
-FROM node:20-slim
+FROM node:20-alpine AS builder
 
 # Install OpenSSL (required by Prisma)
-RUN apt-get update -y && apt-get install -y openssl \
-    && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache openssl
 
-# Set the working directory inside the container
 WORKDIR /app
-
-# Copy dependency definition files
 COPY package*.json ./
+RUN npm ci
 
-# Install dependencies cleanly
-RUN npm ci && npm cache clean --force
-
-# Copy the rest of the backend source code
 COPY . .
-
-# Generate the Prisma database client
 RUN npx prisma generate
 
-# Expose the API port (as defined in server.js)
+FROM node:20-alpine AS runner
+
+# Install OpenSSL for runtime
+RUN apk add --no-cache openssl
+
+WORKDIR /app
+
+# Create a non-root user
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nodejs
+
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/src ./src
+COPY --from=builder /app/server.js ./server.js
+
+# Change ownership to non-root user
+RUN chown -R nodejs:nodejs /app
+
+USER nodejs
+
 EXPOSE 3001
 
-# Command to run the backend application    
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3001/api/health || exit 1
+
 CMD ["npm", "start"]
