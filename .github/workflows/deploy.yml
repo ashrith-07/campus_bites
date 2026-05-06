@@ -1,9 +1,6 @@
 name: CI/CD Pipeline
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 env:
@@ -153,7 +150,13 @@ jobs:
           ECR_REPOSITORY: ${{ env.PROJECT_NAME }}-frontend
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest ./frontend
+          docker build \
+            --build-arg NEXT_PUBLIC_PUSHER_KEY=${{ secrets.NEXT_PUBLIC_PUSHER_KEY }} \
+            --build-arg NEXT_PUBLIC_PUSHER_CLUSTER=${{ secrets.NEXT_PUBLIC_PUSHER_CLUSTER }} \
+            --build-arg NEXT_PUBLIC_API_URL="" \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:latest \
+            ./frontend
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 

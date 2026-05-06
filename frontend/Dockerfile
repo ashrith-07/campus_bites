@@ -19,6 +19,16 @@ COPY . .
 # Next.js telemetry can be disabled during the build in the docker container.
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# NEXT_PUBLIC_* vars must be declared as ARGs and set as ENVs before
+# `npm run build` because Next.js bakes them into the JS bundle at build time.
+# They are passed via --build-arg in the CI/CD workflow.
+ARG NEXT_PUBLIC_PUSHER_KEY
+ARG NEXT_PUBLIC_PUSHER_CLUSTER
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_PUSHER_KEY=$NEXT_PUBLIC_PUSHER_KEY
+ENV NEXT_PUBLIC_PUSHER_CLUSTER=$NEXT_PUBLIC_PUSHER_CLUSTER
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
 RUN npm run build
 RUN mkdir -p public
 
