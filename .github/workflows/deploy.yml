@@ -99,10 +99,30 @@ jobs:
 
       - name: Terraform Plan
         working-directory: ${{ env.TF_WORKING_DIR }}
+        env:
+          TF_VAR_database_url: ${{ secrets.DATABASE_URL }}
+          TF_VAR_jwt_secret: ${{ secrets.JWT_SECRET }}
+          TF_VAR_cloudinary_cloud_name: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          TF_VAR_cloudinary_api_key: ${{ secrets.CLOUDINARY_API_KEY }}
+          TF_VAR_cloudinary_api_secret: ${{ secrets.CLOUDINARY_API_SECRET }}
+          TF_VAR_pusher_app_id: ${{ secrets.PUSHER_APP_ID }}
+          TF_VAR_pusher_key: ${{ secrets.PUSHER_KEY }}
+          TF_VAR_pusher_secret: ${{ secrets.PUSHER_SECRET }}
+          TF_VAR_pusher_cluster: ${{ secrets.PUSHER_CLUSTER }}
         run: terraform plan
 
       - name: Terraform Apply
         working-directory: ${{ env.TF_WORKING_DIR }}
+        env:
+          TF_VAR_database_url: ${{ secrets.DATABASE_URL }}
+          TF_VAR_jwt_secret: ${{ secrets.JWT_SECRET }}
+          TF_VAR_cloudinary_cloud_name: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          TF_VAR_cloudinary_api_key: ${{ secrets.CLOUDINARY_API_KEY }}
+          TF_VAR_cloudinary_api_secret: ${{ secrets.CLOUDINARY_API_SECRET }}
+          TF_VAR_pusher_app_id: ${{ secrets.PUSHER_APP_ID }}
+          TF_VAR_pusher_key: ${{ secrets.PUSHER_KEY }}
+          TF_VAR_pusher_secret: ${{ secrets.PUSHER_SECRET }}
+          TF_VAR_pusher_cluster: ${{ secrets.PUSHER_CLUSTER }}
         run: terraform apply -auto-approve
         
       - name: Export Terraform Outputs

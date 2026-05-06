@@ -48,6 +48,42 @@ resource "aws_ecs_task_definition" "app" {
         {
           name  = "NODE_ENV"
           value = "production"
+        },
+        {
+          name  = "DATABASE_URL"
+          value = var.database_url
+        },
+        {
+          name  = "JWT_SECRET"
+          value = var.jwt_secret
+        },
+        {
+          name  = "CLOUDINARY_CLOUD_NAME"
+          value = var.cloudinary_cloud_name
+        },
+        {
+          name  = "CLOUDINARY_API_KEY"
+          value = var.cloudinary_api_key
+        },
+        {
+          name  = "CLOUDINARY_API_SECRET"
+          value = var.cloudinary_api_secret
+        },
+        {
+          name  = "PUSHER_APP_ID"
+          value = var.pusher_app_id
+        },
+        {
+          name  = "PUSHER_KEY"
+          value = var.pusher_key
+        },
+        {
+          name  = "PUSHER_SECRET"
+          value = var.pusher_secret
+        },
+        {
+          name  = "PUSHER_CLUSTER"
+          value = var.pusher_cluster
         }
       ]
       logConfiguration = {
