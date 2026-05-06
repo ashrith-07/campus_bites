@@ -50,6 +50,7 @@ jobs:
       frontend_ecr_url: ${{ steps.tf_outputs.outputs.frontend_ecr_url }}
       ecs_cluster_name: ${{ steps.tf_outputs.outputs.ecs_cluster_name }}
       ecs_service_name: ${{ steps.tf_outputs.outputs.ecs_service_name }}
+      task_definition_arn: ${{ steps.tf_outputs.outputs.task_definition_arn }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -196,12 +197,11 @@ jobs:
 
       - name: Deploy New Task Definition to ECS
         run: |
-          # Explicitly set the new task definition (with env vars) on the service,
-          # then force a new deployment so ECS pulls the latest :latest image.
+          # Terraform already updated the ECS service to the new task definition.
+          # --force-new-deployment stops old tasks and starts new ones with the updated task def.
           aws ecs update-service \
             --cluster ${{ needs.terraform.outputs.ecs_cluster_name }} \
             --service ${{ needs.terraform.outputs.ecs_service_name }} \
-            --task-definition ${{ needs.terraform.outputs.task_definition_arn }} \
             --force-new-deployment
 
       - name: Verify ECS Service Status
