@@ -43,7 +43,7 @@ function OrderTrackingContent() {
   const fetchOrderDetails = async () => {
     try {
       const token = localStorage.getItem('token');
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://campus-bites-server.vercel.app/api';
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api/backend';
       
       const response = await fetch(`${API_URL}/orders/${orderId}`, {
         headers: {

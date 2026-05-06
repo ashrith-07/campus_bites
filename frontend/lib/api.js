@@ -1,5 +1,8 @@
 'use client';
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://campus-bites-server.vercel.app/api';
+// In production (ECS), requests go through the Next.js rewrite proxy at /api/backend
+// which server-side proxies to localhost:3001 — no CORS.
+// In local dev, set NEXT_PUBLIC_API_URL=http://localhost:3001/api in .env.local
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api/backend';
 
 const getToken = () => {
   if (typeof window !== 'undefined') {

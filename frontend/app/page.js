@@ -41,7 +41,7 @@ function HomeContent() {
           } else if (item.imageUrl.startsWith('http')) {
             imageUrl = item.imageUrl;
           } else {
-            const baseUrl = (process.env.NEXT_PUBLIC_API_URL?.replace('/api', '')) || 'https://campus-bites-server.vercel.app';
+            const baseUrl = (process.env.NEXT_PUBLIC_API_URL?.replace('/api', '')) || '';
             const imagePath = item.imageUrl.startsWith('/') ? item.imageUrl : `/${item.imageUrl}`;
             imageUrl = `${baseUrl}${imagePath}`;
           }

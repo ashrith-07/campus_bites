@@ -26,7 +26,8 @@ export default function ProfilePage() {
 
   const fetchOrders = async () => {
     try {
-      const response = await fetch('https://campus-bites-server.vercel.app/api/orders', {
+      const BASE = process.env.NEXT_PUBLIC_API_URL || '/api/backend';
+      const response = await fetch(`${BASE}/orders`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

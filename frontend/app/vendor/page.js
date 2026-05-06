@@ -31,7 +31,7 @@ export default function VendorDashboard() {
     updateStoreStatus(newStatus);
     
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://campus-bites-server.vercel.app/api';
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api/backend';
       const response = await fetch(`${API_URL}/store/status`, {
         method: 'POST',
         headers: {
@@ -261,7 +261,8 @@ function OrdersManagement({ token }) {
   const fetchOrders = async () => {
     try {
       console.log('[OrdersManagement] 🔄 Fetching orders...');
-      const response = await fetch('https://campus-bites-server.vercel.app/api/orders', {
+      const BASE = process.env.NEXT_PUBLIC_API_URL || '/api/backend';
+      const response = await fetch(`${BASE}/orders`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
@@ -275,7 +276,8 @@ function OrdersManagement({ token }) {
 
   const updateOrderStatus = async (orderId, newStatus) => {
     try {
-      const response = await fetch(`https://campus-bites-server.vercel.app/api/orders/${orderId}`, {
+      const BASE2 = process.env.NEXT_PUBLIC_API_URL || '/api/backend';
+      const response = await fetch(`${BASE2}/orders/${orderId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -503,7 +505,7 @@ function MenuManagement({ token }) {
     popular: false
   });
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://campus-bites-server.vercel.app/api';
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api/backend';
 
   useEffect(() => {
     fetchMenuItems();
@@ -957,7 +959,8 @@ function StatusOverview({ token }) {
 
   const fetchStats = async () => {
     try {
-      const response = await fetch('https://campus-bites-server.vercel.app/api/orders', {
+      const BASE3 = process.env.NEXT_PUBLIC_API_URL || '/api/backend';
+      const response = await fetch(`${BASE3}/orders`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();

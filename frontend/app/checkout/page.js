@@ -52,7 +52,7 @@ export default function CheckoutPage() {
       setLoading(true);
       setError('');
       
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://campus-bites-server.vercel.app/api';
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api/backend';
       
       const checkoutResponse = await fetch(`${API_URL}/orders/checkout`, {
         method: 'POST',

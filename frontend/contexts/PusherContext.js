@@ -20,7 +20,7 @@ export function PusherProvider({ children }) {
   useEffect(() => {
     const fetchStoreStatus = async () => {
       try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://campus-bites-server.vercel.app/api';
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api/backend';
         
         
         const response = await fetch(`${API_URL}/store/status`);
