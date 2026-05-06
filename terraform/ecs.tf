@@ -110,10 +110,6 @@ resource "aws_ecs_task_definition" "app" {
         {
           name  = "NODE_ENV"
           value = "production"
-        },
-        {
-          name  = "NEXT_PUBLIC_API_URL"
-          value = "http://localhost:3001"
         }
       ]
       logConfiguration = {
@@ -149,10 +145,5 @@ resource "aws_ecs_service" "app_service" {
   tags = {
     Name        = "${var.project_name}-service"
     Environment = var.environment
-  }
-  
-  # Ignore changes to task_definition because GitHub Actions will deploy new versions
-  lifecycle {
-    ignore_changes = [task_definition]
   }
 }

@@ -27,3 +27,8 @@ output "data_bucket_name" {
   description = "The name of the data S3 bucket"
   value       = aws_s3_bucket.app_data.id
 }
+
+output "task_definition_arn" {
+  description = "The ARN of the latest ECS task definition (with env vars)"
+  value       = aws_ecs_task_definition.app.arn
+}

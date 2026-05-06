@@ -133,6 +133,7 @@ jobs:
           echo "frontend_ecr_url=$(terraform output -raw frontend_ecr_repository_url)" >> "$GITHUB_OUTPUT"
           echo "ecs_cluster_name=$(terraform output -raw ecs_cluster_name)" >> "$GITHUB_OUTPUT"
           echo "ecs_service_name=$(terraform output -raw ecs_service_name)" >> "$GITHUB_OUTPUT"
+          echo "task_definition_arn=$(terraform output -raw task_definition_arn)" >> "$GITHUB_OUTPUT"
 
   build-and-push:
     name: Build and Push Docker Images
@@ -193,11 +194,14 @@ jobs:
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Force ECS Service Deployment
+      - name: Deploy New Task Definition to ECS
         run: |
+          # Explicitly set the new task definition (with env vars) on the service,
+          # then force a new deployment so ECS pulls the latest :latest image.
           aws ecs update-service \
             --cluster ${{ needs.terraform.outputs.ecs_cluster_name }} \
             --service ${{ needs.terraform.outputs.ecs_service_name }} \
+            --task-definition ${{ needs.terraform.outputs.task_definition_arn }} \
             --force-new-deployment
 
       - name: Verify ECS Service Status
